@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
@@ -186,6 +186,22 @@
       line-height: 40px; /* vertically center letter, avoid cropping */
     }
 
+/* CONTINUATION MARKER WHEN A WORD WRAPS */
+.letter-input.continues::after {
+  content: "-";
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  font-size: 16px;
+  color: #b30000;
+}
+
+/* Optional background highlight */
+.letter-input.bg-continue {
+  background: #ffe9e9;
+}
+
+
     .letter-space {
       width: 14px;
       height: 40px;
@@ -208,6 +224,20 @@
       background: #d00000;
       transform: translateY(-1px);
     }
+
+/* continuation marker placed BETWEEN rows */
+.continue-marker {
+  width: 100%;
+  text-align: right;
+  font-size: 18px;
+  color: #b30000;
+  padding-right: 4px;
+  margin-top: -4px;
+  margin-bottom: -4px;
+  line-height: 1;
+  pointer-events: none;
+}
+
 
     #feedback {
       margin-top: 8px;
@@ -503,20 +533,23 @@ function normalize(str) {
     .replace(/[^a-z0-9]/g, "");
 }
 
-/* Create crossword-style inputs for current answer */
 function renderInputs() {
   const answer = rounds[currentRound].answer;
   solutionWrapperEl.innerHTML = "";
   letterInputs = [];
 
-  for (let i = 0; i < answer.length; i++) {
-    const ch = answer[i];
+  const words = answer.split(" ");
 
-    if (ch === " ") {
-      const spaceDiv = document.createElement("div");
-      spaceDiv.className = "letter-space";
-      solutionWrapperEl.appendChild(spaceDiv);
-    } else {
+  words.forEach((word, wIndex) => {
+
+    // CREATE A WORD-GROUP WRAPPER (prevents mid-word line breaks)
+    const wordBox = document.createElement("div");
+    wordBox.style.display = (currentRound === 3) ? "flex" : "inline-flex";  
+    wordBox.style.flexWrap = (currentRound === 3) ? "wrap" : "nowrap";      
+    wordBox.style.gap = "4px";
+
+    // build letters
+    [...word].forEach(letter => {
       const inp = document.createElement("input");
       inp.type = "text";
       inp.maxLength = 1;
@@ -528,10 +561,9 @@ function renderInputs() {
         inp.value = inp.value.toUpperCase();
         feedbackEl.textContent = "";
         nextButtonEl.style.display = "none";
-        if (inp.value && inp.nextInput) {
-          inp.nextInput.focus();
-        }
+        if (inp.value && inp.nextInput) inp.nextInput.focus();
         checkCompletion();
+        setTimeout(insertContinuationMarkers, 30);
       });
 
       inp.addEventListener("keydown", (e) => {
@@ -549,19 +581,61 @@ function renderInputs() {
       });
 
       letterInputs.push(inp);
-      solutionWrapperEl.appendChild(inp);
-    }
-  }
+      wordBox.appendChild(inp);
+    });
 
+    solutionWrapperEl.appendChild(wordBox);
+
+    // add space between words
+    if (wIndex < words.length - 1) {
+      const spaceDiv = document.createElement("div");
+      spaceDiv.className = "letter-space";
+      solutionWrapperEl.appendChild(spaceDiv);
+    }
+  });
+
+  // link navigation
   for (let i = 0; i < letterInputs.length; i++) {
     letterInputs[i].prevInput = letterInputs[i - 1] || null;
     letterInputs[i].nextInput = letterInputs[i + 1] || null;
   }
 
-  if (letterInputs[0]) {
-    letterInputs[0].focus();
+  // only desktop auto-focus (delayed)
+  if (!/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
+    setTimeout(() => {
+      if (letterInputs[0]) letterInputs[0].focus({ preventScroll: true });
+    }, 150);
+  }
+
+  insertContinuationMarkers();
+}
+
+
+function insertContinuationMarkers() {
+  document.querySelectorAll(".continue-marker").forEach(el => el.remove());
+
+  if (letterInputs.length === 0) return;
+
+  // only round 4 needs continuation markers
+  if (currentRound !== 3) return;
+
+  let lastTop = letterInputs[0].offsetTop;
+
+  for (let i = 1; i < letterInputs.length; i++) {
+    const current = letterInputs[i];
+
+    if (current.offsetTop > lastTop) {
+      const marker = document.createElement("div");
+      marker.className = "continue-marker";
+      marker.textContent = "–";  
+      solutionWrapperEl.insertBefore(marker, current);
+    }
+
+    lastTop = current.offsetTop;
   }
 }
+
+
 
 /* Load current round */
 function loadRound() {
